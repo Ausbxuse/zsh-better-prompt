@@ -191,57 +191,60 @@ function zsh-system-clipboard-set-osc52() {
     printf '\e]52;c;%s\a' "$(printf %s "$_in" | base64 | tr -d '\n')"
   fi
 }
-# --- TRUE local clipboard read via OSC52 (Ghostty supports this) ---
-# Query terminal for clipboard and capture the reply.
-# Requires: Ghostty clipboard-read=allow (or you'll be prompted).
-# --- TRUE local clipboard read via OSC52 (Ghostty) with tmux fallback ---
 function zsh-system-clipboard-get-osc52() {
-  # 0) tmux path: tmux can trigger an OSC52 read and store it in a buffer
+  local out="" tty="/dev/tty"
+
+  # If inside tmux, try tmux's clipboard fetch first (tmux captures OSC52 replies).
   if [[ -n "$TMUX" ]]; then
-    tmux refresh-client -l 2>/dev/null   # ask terminal for clipboard into tmux buffer
-    local _tbuf
-    _tbuf="$(tmux show-buffer 2>/dev/null || printf '')"
-    if [[ -n "$_tbuf" ]]; then
-      printf %s "$_tbuf"
+    tmux refresh-client -l 2>/dev/null
+    out="$(tmux show-buffer 2>/dev/null || printf '')"
+    if [[ -n "$out" ]]; then
+      printf %s "$out"
       return 0
     fi
-    # If that failed, drop through to raw OSC52 query.
   fi
 
-  # 1) raw OSC52 read (Ghostty supports this; set clipboard-read = allow/ask)
-  local tty="/dev/tty" ch buf=""
-  # Query: OSC 52 ; c ; ?  BEL
+  # Direct OSC52 read (Ghostty returns the clipboard when read is allowed/approved)
+  # Ask: OSC 52 ; c ; ?  BEL
   print -n $'\e]52;c;?\a' >| "$tty"
 
-  # Read until BEL or ST (ESC \) or ~1s timeout
-  local deadline=$((SECONDS + 1))
+  # Collect reply until BEL (\a) or ST (ESC \). Small 1s budget.
+  local resp="" chunk deadline=$((SECONDS + 1))
   exec {fd}<>"$tty"
   while (( SECONDS < deadline )); do
-    IFS= read -r -u $fd -k 1 ch || break
-    buf+="$ch"
-    [[ "$ch" == $'\a' ]] && break
-    [[ "$buf" == *$'\e\\' ]] && break
+    # Prefer reading until BEL quickly
+    if IFS= read -r -u $fd -t 0.15 -d $'\a' chunk 2>/dev/null; then
+      resp+="$chunk"$'\a'
+      break
+    fi
+    # Or accumulate byte-by-byte and stop on ST (ESC \)
+    if IFS= read -r -u $fd -t 0.15 -k 1 chunk 2>/dev/null; then
+      resp+="$chunk"
+      [[ "$resp" == *$'\e\\' ]] && break
+    fi
   done
   exec {fd}>&-
 
-  # Extract the last OSC 52 response payload
-  local osc="${buf##*$'\e]52;'}"
-  [[ "$osc" == c\;* ]] && osc="${osc#c;}"
-  # Strip possible terminators
-  osc="${osc%$'\a'*}"
-  osc="${osc%$'\e\\'*}"
+  # Isolate the last OSC52 payload: ESC ] 52 ; <params> ; <base64> (BEL|ST)
+  local frag payload
+  frag="${resp##*$'\e]52;'}"   # after the last ]52;
+  frag="${frag#*;}"            # drop params up to the next ;
+  payload="${frag%$'\a'*}"     # drop BEL if present
+  payload="${payload%$'\e\\'*}"# drop ST if present
+  # If payload still starts with c; or p;, strip it
+  [[ "$payload" == c\;* || "$payload" == p\;* ]] && payload="${payload#??}"
 
   # Base64 decode (GNU: -d, BSD/macOS: -D)
-  local out=""
-  out="$(printf %s "$osc" | base64 -d 2>/dev/null)" || \
-  out="$(printf %s "$osc" | base64 -D 2>/dev/null)" || out=""
-
-  if [[ -n "$out" ]]; then
+  if out="$(printf %s "$payload" | base64 -d 2>/dev/null)"; then
+    printf %s "$out"
+    return 0
+  fi
+  if out="$(printf %s "$payload" | base64 -D 2>/dev/null)"; then
     printf %s "$out"
     return 0
   fi
 
-  # 2) Fallback: whatever we last yanked in-shell via shadow buffer
+  # Fallback: whatever you last yanked in-shell (shadow buffer)
   printf %s "$ZSC_SHADOW_CLIPBOARD"
 }
 
@@ -304,8 +307,8 @@ function zsh-system-clipboard-vicmd-vi-change-whole-line(){ zle vi-change-whole-
 zle -N zsh-system-clipboard-vicmd-vi-change-whole-line
 function zsh-system-clipboard-vicmd-vi-change(){ zle vi-change; printf '%s' "$CUTBUFFER" | zsh-system-clipboard-set; }
 zle -N zsh-system-clipboard-vicmd-vi-change
-function zsh-system-clipboard-vicmd-vi-substitue(){ zle vi-substitue; printf '%s' "$CUTBUFFER" | zsh-system-clipboard-set; }
-zle -N zsh-system-clipboard-vicmd-vi-substitue
+function zsh-system-clipboard-vicmd-vi-substitute(){ zle vi-substitute; printf '%s' "$CUTBUFFER" | zsh-system-clipboard-set; }
+zle -N zsh-system-clipboard-vicmd-vi-substitute
 function zsh-system-clipboard-vicmd-vi-backward-delete-char(){ zle vi-backward-delete-char; printf '%s' "$CUTBUFFER" | zsh-system-clipboard-set; }
 zle -N zsh-system-clipboard-vicmd-vi-backward-delete-char
 
