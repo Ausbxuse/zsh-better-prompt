@@ -93,7 +93,8 @@ truncated_path="%F{4}%0~$NEWLINE%{%k%}%f%F{5}❯%{%k%}%F{white}"
 background_jobs="%(1j.%F{0}%K{0}%F{3}%{%k%}%F{0}%f.)"
 non_zero_return_value="%(0?..%F{1}%f)"
 
-PROMPT="%F{3}%n%F{2}@%F{6}%m%f:$truncated_path "
+# PROMPT="%F{3}%n%F{2}@%F{6}%m%f:$truncated_path "
+PROMPT="$truncated_path "
 
 RPROMPT='$background_jobs $non_zero_return_value %F{cyan}${vcs_info_msg_0_}%f %F{10}$(prompt_command_execution_time)%F{8}%D{%H:%M:%S %m-%d}'
 zle_highlight=(default:bold)
