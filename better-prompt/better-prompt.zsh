@@ -93,8 +93,73 @@ truncated_path="%F{4}%0~$NEWLINE%{%k%}%f%F{5}❯%{%k%}%F{white}"
 background_jobs="%(1j.%F{0}%K{0}%F{3}%{%k%}%F{0}%f.)"
 non_zero_return_value="%(0?..%F{1}%f)"
 
+# Distro icon in status bar (cached on first use).
+typeset -g __PROMPT_DISTRO_ICON=""
+typeset -g __PROMPT_DISTRO_COLOR=""
+function _prompt_set_distro_icon() {
+  [[ -n "$__PROMPT_DISTRO_ICON" ]] && return
+
+  local os_id="" os_like="" os_name=""
+  if [[ -r /etc/os-release ]]; then
+    local line
+    while IFS= read -r line; do
+      case "$line" in
+        ID=*) os_id="${line#ID=}" ;;
+        ID_LIKE=*) os_like="${line#ID_LIKE=}" ;;
+        NAME=*) os_name="${line#NAME=}" ;;
+      esac
+    done < /etc/os-release
+    os_id="${os_id%\"}"; os_id="${os_id#\"}"
+    os_like="${os_like%\"}"; os_like="${os_like#\"}"
+    os_name="${os_name%\"}"; os_name="${os_name#\"}"
+  fi
+
+  case "$os_id" in
+    arch) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#1793D1" ;;
+    manjaro) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#35BF5C" ;;
+    endeavouros) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#7E4DD2" ;;
+    fedora) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#294172" ;;
+    debian) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#A81D33" ;;
+    ubuntu) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#E95420" ;;
+    linuxmint) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#87CF3E" ;;
+    pop) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#48B9C7" ;;
+    nixos) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#5277C3" ;;
+    alpine) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#0D597F" ;;
+    opensuse*|suse) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#73BA25" ;;
+    gentoo) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#54487A" ;;
+    void) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#478061" ;;
+    elementary) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#64B4CA" ;;
+    kali) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#557C94" ;;
+    centos|rhel|rocky|almalinux) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#CC0000" ;;
+  esac
+
+  if [[ -z "$__PROMPT_DISTRO_ICON" ]]; then
+    case "$os_like" in
+      *arch*) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#1793D1" ;;
+      *debian*) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#A81D33" ;;
+      *rhel*|*fedora*) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#294172" ;;
+      *suse*) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#73BA25" ;;
+    esac
+  fi
+
+  if [[ -z "$__PROMPT_DISTRO_ICON" ]]; then
+    case "$OSTYPE" in
+      darwin*) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#555555" ;;
+      linux*) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#888888" ;;
+      msys*|cygwin*|win32*) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#0078D4" ;;
+      *) __PROMPT_DISTRO_ICON=""; __PROMPT_DISTRO_COLOR="#888888" ;;
+    esac
+  fi
+}
+
+function prompt_distro_icon() {
+  _prompt_set_distro_icon
+  [[ -n "$__PROMPT_DISTRO_ICON" ]] || return
+  echo "%F{${__PROMPT_DISTRO_COLOR}}${__PROMPT_DISTRO_ICON}%f "
+}
+
 # PROMPT="%F{3}%n%F{2}@%F{6}%m%f:$truncated_path "
-PROMPT="$truncated_path "
+PROMPT="$(prompt_distro_icon)$truncated_path "
 
 RPROMPT='$background_jobs $non_zero_return_value %F{cyan}${vcs_info_msg_0_}%f %F{10}$(prompt_command_execution_time)%F{8}%D{%H:%M:%S %m-%d}'
 zle_highlight=(default:bold)
